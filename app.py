@@ -197,21 +197,21 @@ def main():
     with st.sidebar:
         st.header("⚙️ Settings")
 
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             st.warning(
-                "⚠️ ANTHROPIC_API_KEY not found. "
+                "⚠️ OPENAI_API_KEY not found. "
                 "Please set it in your .env file or environment variables."
             )
             st.stop()
 
-        st.success("✅ API Key configured")
+        st.success("✅ OpenAI API Key configured")
 
         st.markdown("---")
         st.header("📝 About")
         st.markdown(
             """
-This application uses Claude (Anthropic) to analyze scripts and provide insights on:
+This application uses OpenAI (GPT-4o) to analyze scripts and provide insights on:
 - Story structure and plot
 - Emotional tone and arc
 - Engagement potential (0-10 score)

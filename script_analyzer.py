@@ -1,6 +1,6 @@
 """
-Core script analysis module using Claude API.
-Handles API calls to Claude and parsing of analysis results.
+Core script analysis module using LLM API.
+Supports OpenAI (default) and Anthropic Claude via API.
 """
 
 import json
@@ -8,7 +8,7 @@ import os
 from typing import Optional
 
 from dotenv import load_dotenv
-from anthropic import Anthropic
+from openai import OpenAI
 
 from prompts import SYSTEM_PROMPT, get_user_prompt
 
@@ -17,26 +17,39 @@ load_dotenv()
 
 
 class ScriptAnalyzer:
-    """Analyzes scripts using Claude API to generate storytelling insights."""
+    """Analyzes scripts using OpenAI API (default) to generate storytelling insights."""
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, use_openai: bool = True):
         """
-        Initialize the analyzer with Claude API key.
+        Initialize the analyzer with OpenAI API key (default).
 
         Args:
-            api_key: Optional API key. If not provided, uses ANTHROPIC_API_KEY env var.
+            api_key: Optional API key. If not provided, uses OPENAI_API_KEY or ANTHROPIC_API_KEY env vars.
+            use_openai: If True (default), uses OpenAI. If False, uses Claude/Anthropic.
         """
-        key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        if not key:
-            raise ValueError(
-                "ANTHROPIC_API_KEY not provided. "
-                "Set it as an environment variable or pass it as an argument."
-            )
-        self.client = Anthropic(api_key=key)
+        self.use_openai = use_openai
+
+        if self.use_openai:
+            key = api_key or os.getenv("OPENAI_API_KEY")
+            if not key:
+                raise ValueError(
+                    "OPENAI_API_KEY not provided. "
+                    "Set it as an environment variable or pass it as an argument."
+                )
+            self.client = OpenAI(api_key=key)
+        else:
+            from anthropic import Anthropic
+            key = api_key or os.getenv("ANTHROPIC_API_KEY")
+            if not key:
+                raise ValueError(
+                    "ANTHROPIC_API_KEY not provided. "
+                    "Set it as an environment variable or pass it as an argument."
+                )
+            self.client = Anthropic(api_key=key)
 
     def analyze_script(self, script_text: str) -> dict:
         """
-        Analyze a script using Claude.
+        Analyze a script using OpenAI or Claude API.
 
         Args:
             script_text: The full text of the script
@@ -48,11 +61,11 @@ class ScriptAnalyzer:
             - engagement_potential
             - improvement_suggestions
             - most_suspenseful_moment
-            - raw_response (full Claude response for debugging)
+            - raw_response (full response for debugging)
 
         Raises:
             ValueError: If script is empty or too short
-            json.JSONDecodeError: If Claude's response cannot be parsed as JSON
+            json.JSONDecodeError: If response cannot be parsed as JSON
         """
         if not script_text or not script_text.strip():
             raise ValueError("Script text cannot be empty")
@@ -63,20 +76,38 @@ class ScriptAnalyzer:
         # Prepare prompts
         user_message = get_user_prompt(script_text)
 
-        # Call Claude API
-        response = self.client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=2048,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}],
-        )
-
-        # Extract response text
-        response_text = response.content[0].text
+        try:
+            if self.use_openai:
+                # Call OpenAI API
+                response = self.client.chat.completions.create(
+                    model="gpt-4o",
+                    max_tokens=2048,
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": user_message},
+                    ],
+                    temperature=0.7,
+                )
+                response_text = response.choices[0].message.content
+            else:
+                # Call Claude API
+                response = self.client.messages.create(
+                    model="claude-opus-4-6",
+                    max_tokens=2048,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": user_message}],
+                )
+                response_text = response.content[0].text
+        except Exception as e:
+            return {
+                "error": f"API call failed: {str(e)}",
+                "raw_response": str(e),
+                "parse_error": str(type(e).__name__),
+            }
 
         # Parse JSON response
         try:
-            # Try to find JSON in the response (Claude might wrap it in markdown)
+            # Try to find JSON in the response (might wrap it in markdown)
             json_str = response_text
 
             # If wrapped in markdown code blocks, extract the JSON
@@ -89,7 +120,7 @@ class ScriptAnalyzer:
         except json.JSONDecodeError as e:
             # If parsing fails, return raw response with error info
             return {
-                "error": "Failed to parse Claude's response as JSON",
+                "error": "Failed to parse response as JSON",
                 "raw_response": response_text,
                 "parse_error": str(e),
             }
