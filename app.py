@@ -8,7 +8,12 @@ import os
 from pathlib import Path
 
 import streamlit as st
+from dotenv import load_dotenv
+
 from script_analyzer import ScriptAnalyzer
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def initialize_session_state():

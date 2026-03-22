@@ -7,8 +7,13 @@ import json
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
 from anthropic import Anthropic
+
 from prompts import SYSTEM_PROMPT, get_user_prompt
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class ScriptAnalyzer:
