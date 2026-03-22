@@ -197,28 +197,87 @@ def main():
     with st.sidebar:
         st.header("⚙️ Settings")
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            st.warning(
-                "⚠️ OPENAI_API_KEY not found. "
-                "Please set it in your .env file or environment variables."
-            )
-            st.stop()
+        # Model selection
+        model_choice = st.selectbox(
+            "Select LLM Model",
+            ["OpenAI (GPT-4o)", "Google Gemini", "Claude (Opus 4.6)"],
+            index=0,
+            help="Choose which LLM to use for analysis"
+        )
 
-        st.success("✅ OpenAI API Key configured")
+        model_map = {
+            "OpenAI (GPT-4o)": "openai",
+            "Google Gemini": "gemini",
+            "Claude (Opus 4.6)": "claude",
+        }
+        selected_model = model_map[model_choice]
+
+        # Check for appropriate API key
+        if selected_model == "openai":
+            api_key = os.getenv("OPENAI_API_KEY")
+            if not api_key:
+                st.warning(
+                    "⚠️ OPENAI_API_KEY not found. "
+                    "Please set it in your .env file or environment variables."
+                )
+                st.stop()
+            st.success("✅ OpenAI API Key configured")
+        elif selected_model == "gemini":
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key:
+                st.warning(
+                    "⚠️ GEMINI_API_KEY not found. "
+                    "Please set it in your .env file or environment variables."
+                )
+                st.stop()
+            st.success("✅ Google Gemini API Key configured")
+        elif selected_model == "claude":
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                st.warning(
+                    "⚠️ ANTHROPIC_API_KEY not found. "
+                    "Please set it in your .env file or environment variables."
+                )
+                st.stop()
+            st.success("✅ Claude API Key configured")
+
+        st.session_state.selected_model = selected_model
 
         st.markdown("---")
         st.header("📝 About")
-        st.markdown(
-            """
+        if selected_model == "openai":
+            st.markdown(
+                """
 This application uses OpenAI (GPT-4o) to analyze scripts and provide insights on:
 - Story structure and plot
 - Emotional tone and arc
 - Engagement potential (0-10 score)
 - Actionable improvement suggestions
 - Most suspenseful moments
-            """
-        )
+                """
+            )
+        elif selected_model == "gemini":
+            st.markdown(
+                """
+This application uses Google Gemini to analyze scripts and provide insights on:
+- Story structure and plot
+- Emotional tone and arc
+- Engagement potential (0-10 score)
+- Actionable improvement suggestions
+- Most suspenseful moments
+                """
+            )
+        else:
+            st.markdown(
+                """
+This application uses Claude (Anthropic) to analyze scripts and provide insights on:
+- Story structure and plot
+- Emotional tone and arc
+- Engagement potential (0-10 score)
+- Actionable improvement suggestions
+- Most suspenseful moments
+                """
+            )
 
     # Main content
     col1, col2 = st.columns([2, 1])
@@ -273,7 +332,8 @@ This application uses OpenAI (GPT-4o) to analyze scripts and provide insights on
         else:
             with st.spinner("🤔 Analyzing script... This may take a moment."):
                 try:
-                    analyzer = ScriptAnalyzer()
+                    selected_model = st.session_state.get("selected_model", "openai")
+                    analyzer = ScriptAnalyzer(model=selected_model)
                     result = analyzer.analyze_script(script_text)
                     st.session_state.analysis_result = result
                     st.session_state.error_message = None

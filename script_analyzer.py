@@ -1,6 +1,6 @@
 """
 Core script analysis module using LLM API.
-Supports OpenAI (default) and Anthropic Claude via API.
+Supports OpenAI (default), Google Gemini, and Anthropic Claude via API.
 """
 
 import json
@@ -17,19 +17,19 @@ load_dotenv()
 
 
 class ScriptAnalyzer:
-    """Analyzes scripts using OpenAI API (default) to generate storytelling insights."""
+    """Analyzes scripts using multiple LLM APIs (OpenAI, Gemini, Claude) to generate storytelling insights."""
 
-    def __init__(self, api_key: Optional[str] = None, use_openai: bool = True):
+    def __init__(self, api_key: Optional[str] = None, model: str = "openai"):
         """
-        Initialize the analyzer with OpenAI API key (default).
+        Initialize the analyzer with the specified LLM API.
 
         Args:
-            api_key: Optional API key. If not provided, uses OPENAI_API_KEY or ANTHROPIC_API_KEY env vars.
-            use_openai: If True (default), uses OpenAI. If False, uses Claude/Anthropic.
+            api_key: Optional API key. If not provided, uses environment variables.
+            model: Which model to use: "openai" (default), "gemini", or "claude"
         """
-        self.use_openai = use_openai
+        self.model = model.lower()
 
-        if self.use_openai:
+        if self.model == "openai":
             key = api_key or os.getenv("OPENAI_API_KEY")
             if not key:
                 raise ValueError(
@@ -37,7 +37,19 @@ class ScriptAnalyzer:
                     "Set it as an environment variable or pass it as an argument."
                 )
             self.client = OpenAI(api_key=key)
-        else:
+
+        elif self.model == "gemini":
+            key = api_key or os.getenv("GEMINI_API_KEY")
+            if not key:
+                raise ValueError(
+                    "GEMINI_API_KEY not provided. "
+                    "Set it as an environment variable or pass it as an argument."
+                )
+            import google.generativeai as genai
+            genai.configure(api_key=key)
+            self.client = genai
+
+        elif self.model == "claude":
             from anthropic import Anthropic
             key = api_key or os.getenv("ANTHROPIC_API_KEY")
             if not key:
@@ -46,10 +58,12 @@ class ScriptAnalyzer:
                     "Set it as an environment variable or pass it as an argument."
                 )
             self.client = Anthropic(api_key=key)
+        else:
+            raise ValueError(f"Unsupported model: {model}. Use 'openai', 'gemini', or 'claude'")
 
     def analyze_script(self, script_text: str) -> dict:
         """
-        Analyze a script using OpenAI or Claude API.
+        Analyze a script using the configured LLM API.
 
         Args:
             script_text: The full text of the script
@@ -77,27 +91,16 @@ class ScriptAnalyzer:
         user_message = get_user_prompt(script_text)
 
         try:
-            if self.use_openai:
-                # Call OpenAI API
-                response = self.client.chat.completions.create(
-                    model="gpt-4o",
-                    max_tokens=2048,
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": user_message},
-                    ],
-                    temperature=0.7,
-                )
-                response_text = response.choices[0].message.content
+            if self.model == "openai":
+                response = self._call_openai(user_message)
+            elif self.model == "gemini":
+                response = self._call_gemini(user_message)
+            elif self.model == "claude":
+                response = self._call_claude(user_message)
             else:
-                # Call Claude API
-                response = self.client.messages.create(
-                    model="claude-opus-4-6",
-                    max_tokens=2048,
-                    system=SYSTEM_PROMPT,
-                    messages=[{"role": "user", "content": user_message}],
-                )
-                response_text = response.content[0].text
+                raise ValueError(f"Unsupported model: {self.model}")
+
+            response_text = response
         except Exception as e:
             return {
                 "error": f"API call failed: {str(e)}",
@@ -129,6 +132,42 @@ class ScriptAnalyzer:
         analysis["raw_response"] = response_text
 
         return analysis
+
+    def _call_openai(self, user_message: str) -> str:
+        """Call OpenAI API."""
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=2048,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.7,
+        )
+        return response.choices[0].message.content
+
+    def _call_gemini(self, user_message: str) -> str:
+        """Call Google Gemini API."""
+        model = self.client.GenerativeModel("gemini-2.0-flash")
+        combined_prompt = f"{SYSTEM_PROMPT}\n\n{user_message}"
+        response = model.generate_content(
+            combined_prompt,
+            generation_config=self.client.types.GenerationConfig(
+                max_output_tokens=2048,
+                temperature=0.7,
+            ),
+        )
+        return response.text
+
+    def _call_claude(self, user_message: str) -> str:
+        """Call Claude API."""
+        response = self.client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=2048,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        return response.content[0].text
 
     def validate_analysis(self, analysis: dict) -> bool:
         """

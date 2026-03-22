@@ -1,5 +1,5 @@
 """
-Unit tests for the script analyzer module using OpenAI as default.
+Unit tests for the script analyzer module using OpenAI, Gemini, and Claude.
 """
 
 import json
@@ -17,21 +17,39 @@ class TestScriptAnalyzer:
     def test_analyzer_initialization(self, mock_openai):
         """Test that analyzer initializes with OpenAI API key."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             assert analyzer.client is not None
             mock_openai.assert_called_once_with(api_key="test_key")
 
-    def test_analyzer_missing_api_key(self):
-        """Test that analyzer raises error without API key."""
+    def test_analyzer_missing_openai_key(self):
+        """Test that analyzer raises error without OpenAI API key."""
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-                ScriptAnalyzer()
+                ScriptAnalyzer(model="openai")
+
+    def test_analyzer_missing_gemini_key(self):
+        """Test that analyzer raises error without Gemini API key."""
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(ValueError, match="GEMINI_API_KEY"):
+                ScriptAnalyzer(model="gemini")
+
+    def test_analyzer_missing_claude_key(self):
+        """Test that analyzer raises error without Claude API key."""
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
+                ScriptAnalyzer(model="claude")
+
+    def test_analyzer_invalid_model(self):
+        """Test that analyzer raises error for invalid model."""
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
+            with pytest.raises(ValueError, match="Unsupported model"):
+                ScriptAnalyzer(model="invalid_model")
 
     @patch("script_analyzer.OpenAI")
     def test_empty_script_validation(self, mock_openai):
         """Test that empty scripts are rejected."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             with pytest.raises(ValueError, match="empty"):
                 analyzer.analyze_script("")
 
@@ -39,7 +57,7 @@ class TestScriptAnalyzer:
     def test_script_too_short(self, mock_openai):
         """Test that very short scripts are rejected."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             with pytest.raises(ValueError, match="too short"):
                 analyzer.analyze_script("Hi!")
 
@@ -93,7 +111,7 @@ class TestScriptAnalyzer:
         mock_openai_class.return_value = mock_client
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             result = analyzer.analyze_script(
                 "This is a test script about two characters meeting."
             )
@@ -126,7 +144,7 @@ class TestScriptAnalyzer:
         mock_openai_class.return_value = mock_client
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             result = analyzer.analyze_script(
                 "This is a test script with enough content to pass validation requirements."
             )
@@ -147,7 +165,7 @@ class TestScriptAnalyzer:
         mock_openai_class.return_value = mock_client
 
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             result = analyzer.analyze_script(
                 "This is a test script with enough content to pass validation."
             )
@@ -159,7 +177,7 @@ class TestScriptAnalyzer:
     def test_validate_analysis_success(self, mock_openai):
         """Test validation of complete analysis."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             valid_analysis = {
                 "summary": "Test",
                 "emotional_tone": {},
@@ -173,7 +191,7 @@ class TestScriptAnalyzer:
     def test_validate_analysis_missing_key(self, mock_openai):
         """Test validation fails with missing keys."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             invalid_analysis = {"summary": "Test"}
             assert analyzer.validate_analysis(invalid_analysis) is False
 
@@ -181,7 +199,7 @@ class TestScriptAnalyzer:
     def test_validate_analysis_with_error(self, mock_openai):
         """Test validation fails when analysis has error."""
         with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
-            analyzer = ScriptAnalyzer()
+            analyzer = ScriptAnalyzer(model="openai")
             error_analysis = {"error": "Test error"}
             assert analyzer.validate_analysis(error_analysis) is False
 
