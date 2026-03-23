@@ -209,6 +209,39 @@ class TestScriptAnalyzer:
 
         assert result["summary"] == "Comma safe"
 
+    @patch("script_analyzer.OpenAI")
+    def test_sanitize_unterminated_string(self, mock_openai_class):
+        """Ensure unterminated strings are closed so JSON can be parsed."""
+        test_response = {
+            "summary": "Partial",
+            "emotional_tone": {},
+            "engagement_potential": {},
+            "improvement_suggestions": {},
+            "most_suspenseful_moment": {},
+        }
+
+        payload = json.dumps(test_response)
+        # remove final quote for "summary" to simulate unterminated string
+        broken = payload.replace('"Partial"', '"Partial', 1)
+        json_broken = f"```json\n{broken}\n```"
+
+        mock_choice = MagicMock()
+        mock_choice.message.content = json_broken
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
+            analyzer = ScriptAnalyzer(model="openai")
+            result = analyzer.analyze_script(
+                "This script has enough length to pass validation and contains more than fifty characters."
+            )
+
+        assert result["summary"] == "Partial"
+
     @patch("script_analyzer.requests.post")
     def test_openrouter_free_analysis(self, mock_post):
         """Test analysis flow when using OpenRouter free models."""

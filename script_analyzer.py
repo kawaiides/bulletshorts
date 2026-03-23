@@ -167,7 +167,59 @@ class ScriptAnalyzer:
         """Attempt to repair minor formatting issues (e.g., trailing commas)."""
         # Remove trailing commas before closing object/array tokens
         sanitized = re.sub(r",\s*(?=[}\]])", "", raw_json)
+        sanitized = ScriptAnalyzer._close_unterminated_strings(sanitized)
+        # Close unmatched quotes by appending a quote if odd count
+        if sanitized.count('"') % 2 == 1:
+            sanitized += '"'
+        # Balance braces and brackets by appending closing tokens
+        brace_balance = sanitized.count("{") - sanitized.count("}")
+        if brace_balance > 0:
+            sanitized += "}" * brace_balance
+        bracket_balance = sanitized.count("[") - sanitized.count("]")
+        if bracket_balance > 0:
+            sanitized += "]" * bracket_balance
         return sanitized
+
+    @staticmethod
+    def _close_unterminated_strings(text: str) -> str:
+        """Insert closing quotes when a string hits punctuation without a close."""
+        output = []
+        in_string = False
+        escape = False
+        i = 0
+
+        while i < len(text):
+            c = text[i]
+
+            if c == '"' and not escape:
+                output.append(c)
+                in_string = not in_string
+            elif in_string and c == "\n":
+                output.append('"')
+                in_string = False
+                output.append(c)
+            elif in_string and c == ",":
+                j = i + 1
+                while j < len(text) and text[j].isspace() and text[j] != "\n":
+                    j += 1
+                if j < len(text) and text[j] == '"':
+                    output.append('"')
+                    in_string = False
+                output.append(c)
+            else:
+                output.append(c)
+
+            if c == "\\" and not escape:
+                escape = True
+            else:
+                escape = False
+
+            i += 1
+
+        if in_string:
+            output.append('"')
+
+        return "".join(output)
 
     def _call_openai(self, user_message: str) -> str:
         """Call OpenAI API."""
