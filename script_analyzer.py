@@ -5,6 +5,7 @@ Supports OpenAI (default), Google Gemini, Anthropic Claude, and OpenRouter Free 
 
 import json
 import os
+import re
 from typing import Optional
 
 import requests
@@ -146,6 +147,7 @@ class ScriptAnalyzer:
             elif "```" in response_text:
                 json_str = response_text.split("```")[1].split("```")[0].strip()
 
+            json_str = self._sanitize_json(json_str)
             analysis = json.loads(json_str)
         except json.JSONDecodeError as e:
             # If parsing fails, return raw response with error info
@@ -159,6 +161,13 @@ class ScriptAnalyzer:
         analysis["raw_response"] = response_text
 
         return analysis
+
+    @staticmethod
+    def _sanitize_json(raw_json: str) -> str:
+        """Attempt to repair minor formatting issues (e.g., trailing commas)."""
+        # Remove trailing commas before closing object/array tokens
+        sanitized = re.sub(r",\s*(?=[}\]])", "", raw_json)
+        return sanitized
 
     def _call_openai(self, user_message: str) -> str:
         """Call OpenAI API."""

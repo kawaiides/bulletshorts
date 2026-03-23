@@ -179,6 +179,36 @@ class TestScriptAnalyzer:
         assert "error" in result
         assert "Failed to parse" in result["error"]
 
+    @patch("script_analyzer.OpenAI")
+    def test_analyze_script_trailing_commas(self, mock_openai_class):
+        """Ensure trailing commas in JSON do not break parsing after sanitization."""
+        test_response = {
+            "summary": "Comma safe",
+            "emotional_tone": {},
+            "engagement_potential": {},
+            "improvement_suggestions": {},
+            "most_suspenseful_moment": {},
+        }
+
+        json_base = json.dumps(test_response)
+        json_with_trailing = "```json\n" + json_base[:-1] + ",\n}\n```"
+        mock_choice = MagicMock()
+        mock_choice.message.content = json_with_trailing
+        mock_response = MagicMock()
+        mock_response.choices = [mock_choice]
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "test_key"}):
+            analyzer = ScriptAnalyzer(model="openai")
+            result = analyzer.analyze_script(
+                "This script has enough length to pass validation and contains more than fifty characters."
+            )
+
+        assert result["summary"] == "Comma safe"
+
     @patch("script_analyzer.requests.post")
     def test_openrouter_free_analysis(self, mock_post):
         """Test analysis flow when using OpenRouter free models."""
