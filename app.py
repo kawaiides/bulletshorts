@@ -200,7 +200,12 @@ def main():
         # Model selection
         model_choice = st.selectbox(
             "Select LLM Model",
-            ["OpenAI (GPT-4o)", "Google Gemini", "Claude (Opus 4.6)"],
+            [
+                "OpenAI (GPT-4o)",
+                "Google Gemini",
+                "Claude (Opus 4.6)",
+                "OpenRouter (Free Models)",
+            ],
             index=0,
             help="Choose which LLM to use for analysis"
         )
@@ -209,6 +214,7 @@ def main():
             "OpenAI (GPT-4o)": "openai",
             "Google Gemini": "gemini",
             "Claude (Opus 4.6)": "claude",
+            "OpenRouter (Free Models)": "openrouter_free",
         }
         selected_model = model_map[model_choice]
 
@@ -240,6 +246,15 @@ def main():
                 )
                 st.stop()
             st.success("✅ Claude API Key configured")
+        else:
+            api_key = os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                st.warning(
+                    "⚠️ OPENROUTER_API_KEY not found. "
+                    "Please set it in your .env file or environment variables."
+                )
+                st.stop()
+            st.success("✅ OpenRouter API Key configured")
 
         st.session_state.selected_model = selected_model
 
@@ -267,10 +282,21 @@ This application uses Google Gemini to analyze scripts and provide insights on:
 - Most suspenseful moments
                 """
             )
-        else:
+        elif selected_model == "claude":
             st.markdown(
                 """
 This application uses Claude (Anthropic) to analyze scripts and provide insights on:
+- Story structure and plot
+- Emotional tone and arc
+- Engagement potential (0-10 score)
+- Actionable improvement suggestions
+- Most suspenseful moments
+                """
+            )
+        else:
+            st.markdown(
+                """
+This application uses OpenRouter's free models router to analyze scripts and provide insights on:
 - Story structure and plot
 - Emotional tone and arc
 - Engagement potential (0-10 score)

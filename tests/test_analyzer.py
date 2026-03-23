@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from script_analyzer import ScriptAnalyzer, analyze_script
+from script_analyzer import OPENROUTER_CHAT_URL, ScriptAnalyzer, analyze_script
 
 
 class TestScriptAnalyzer:
@@ -38,6 +38,12 @@ class TestScriptAnalyzer:
         with patch.dict("os.environ", {}, clear=True):
             with pytest.raises(ValueError, match="ANTHROPIC_API_KEY"):
                 ScriptAnalyzer(model="claude")
+
+    def test_analyzer_missing_openrouter_key(self):
+        """Test that analyzer raises error without OpenRouter API key."""
+        with patch.dict("os.environ", {}, clear=True):
+            with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+                ScriptAnalyzer(model="openrouter_free")
 
     def test_analyzer_invalid_model(self):
         """Test that analyzer raises error for invalid model."""
@@ -172,6 +178,42 @@ class TestScriptAnalyzer:
 
         assert "error" in result
         assert "Failed to parse" in result["error"]
+
+    @patch("script_analyzer.requests.post")
+    def test_openrouter_free_analysis(self, mock_post):
+        """Test analysis flow when using OpenRouter free models."""
+        test_response_payload = {
+            "summary": "Free router test summary",
+            "emotional_tone": {},
+            "engagement_potential": {},
+            "improvement_suggestions": {},
+            "most_suspenseful_moment": {},
+        }
+
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "choices": [
+                {"message": {"content": json.dumps(test_response_payload)}}
+            ]
+        }
+        mock_post.return_value = mock_response
+
+        script_text = "This script has enough length to pass the minimum validation requirement."
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "test_or_key"}):
+            analyzer = ScriptAnalyzer(model="openrouter_free")
+            result = analyzer.analyze_script(script_text)
+
+        assert result["summary"] == "Free router test summary"
+        assert result["raw_response"] == json.dumps(test_response_payload)
+
+        mock_post.assert_called_once()
+        called_args, called_kwargs = mock_post.call_args
+        assert called_args[0] == OPENROUTER_CHAT_URL
+        assert called_kwargs["headers"]["Authorization"] == "Bearer test_or_key"
+        assert called_kwargs["json"]["model"] == "openrouter/free"
+        assert called_kwargs["json"]["reasoning"] == {"enabled": True}
+        assert called_kwargs["timeout"] == 60
 
     @patch("script_analyzer.OpenAI")
     def test_validate_analysis_success(self, mock_openai):

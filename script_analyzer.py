@@ -1,14 +1,19 @@
 """
 Core script analysis module using LLM API.
-Supports OpenAI (default), Google Gemini, and Anthropic Claude via API.
+Supports OpenAI (default), Google Gemini, Anthropic Claude, and OpenRouter Free via API.
 """
 
 import json
 import os
 from typing import Optional
 
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ModuleNotFoundError:  # pragma: no cover
+    OpenAI = None
 
 from prompts import SYSTEM_PROMPT, get_user_prompt
 
@@ -16,8 +21,13 @@ from prompts import SYSTEM_PROMPT, get_user_prompt
 load_dotenv()
 
 
+OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL_NAME = "openrouter/free"
+OPENROUTER_TIMEOUT_SECONDS = 60
+
+
 class ScriptAnalyzer:
-    """Analyzes scripts using multiple LLM APIs (OpenAI, Gemini, Claude) to generate storytelling insights."""
+    """Analyzes scripts using multiple LLM APIs (OpenAI, Gemini, Claude, OpenRouter Free) to generate storytelling insights."""
 
     def __init__(self, api_key: Optional[str] = None, model: str = "openai"):
         """
@@ -25,7 +35,7 @@ class ScriptAnalyzer:
 
         Args:
             api_key: Optional API key. If not provided, uses environment variables.
-            model: Which model to use: "openai" (default), "gemini", or "claude"
+            model: Which model to use: "openai" (default), "gemini", "claude", or "openrouter_free"
         """
         self.model = model.lower()
 
@@ -35,6 +45,10 @@ class ScriptAnalyzer:
                 raise ValueError(
                     "OPENAI_API_KEY not provided. "
                     "Set it as an environment variable or pass it as an argument."
+                )
+            if OpenAI is None:
+                raise ValueError(
+                    "OpenAI SDK not installed. Run `pip install openai` before using this model."
                 )
             self.client = OpenAI(api_key=key)
 
@@ -58,8 +72,19 @@ class ScriptAnalyzer:
                     "Set it as an environment variable or pass it as an argument."
                 )
             self.client = Anthropic(api_key=key)
+        elif self.model == "openrouter_free":
+            key = api_key or os.getenv("OPENROUTER_API_KEY")
+            if not key:
+                raise ValueError(
+                    "OPENROUTER_API_KEY not provided. "
+                    "Set it as an environment variable or pass it as an argument."
+                )
+            self.openrouter_api_key = key
+            self.client = None
         else:
-            raise ValueError(f"Unsupported model: {model}. Use 'openai', 'gemini', or 'claude'")
+            raise ValueError(
+                f"Unsupported model: {model}. Use 'openai', 'gemini', 'claude', or 'openrouter_free'"
+            )
 
     def analyze_script(self, script_text: str) -> dict:
         """
@@ -97,6 +122,8 @@ class ScriptAnalyzer:
                 response = self._call_gemini(user_message)
             elif self.model == "claude":
                 response = self._call_claude(user_message)
+            elif self.model == "openrouter_free":
+                response = self._call_openrouter_free(user_message)
             else:
                 raise ValueError(f"Unsupported model: {self.model}")
 
@@ -168,6 +195,42 @@ class ScriptAnalyzer:
             messages=[{"role": "user", "content": user_message}],
         )
         return response.content[0].text
+
+    def _call_openrouter_free(self, user_message: str) -> str:
+        """Call the OpenRouter free models router."""
+        payload = {
+            "model": OPENROUTER_MODEL_NAME,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            "temperature": 0.7,
+            "max_tokens": 2048,
+            "reasoning": {"enabled": True},
+        }
+        headers = {
+            "Authorization": f"Bearer {self.openrouter_api_key}",
+            "Content-Type": "application/json",
+        }
+
+        response = requests.post(
+            OPENROUTER_CHAT_URL,
+            json=payload,
+            headers=headers,
+            timeout=OPENROUTER_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+
+        data = response.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError("OpenRouter returned no choices in the response.")
+
+        message_content = choices[0].get("message", {}).get("content")
+        if message_content is None:
+            raise ValueError("OpenRouter response missing message content.")
+
+        return message_content
 
     def validate_analysis(self, analysis: dict) -> bool:
         """

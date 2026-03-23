@@ -13,6 +13,7 @@ An intelligent script analysis system powered by Claude that generates deep insi
   - Cliffhanger/Resolution
 - 💡 **Improvement Suggestions**: Actionable feedback on pacing, dialogue, character development, and story structure
 - 🎬 **Suspenseful Moments**: Identification of the most suspenseful or cliffhanger moment
+- 🌐 **OpenRouter Free Models**: Optional zero-cost inference via the `openrouter/free` router
 
 ## System Architecture
 
@@ -54,17 +55,25 @@ An intelligent script analysis system powered by Claude that generates deep insi
 └────────────────────┘
 ```
 
+The `ScriptAnalyzer` can target OpenAI, Gemini, Claude, or OpenRouter's free router depending on the selected model.
+
 ## Installation & Setup
 
 ### Prerequisites
 - Python 3.10+
 - Anthropic API key (free or paid tier)
+- OpenRouter API key (optional, for the `openrouter/free` router)
 
 ### Step 1: Get an API Key
 1. Visit [https://console.anthropic.com/](https://console.anthropic.com/)
 2. Sign up or log in
 3. Navigate to API keys and create a new key
 4. Copy the key (you'll need it in Step 3)
+
+### Step 1b: (Optional) Get an OpenRouter Key
+1. Go to [https://openrouter.ai/](https://openrouter.ai/) and sign up for a free account
+2. Head to the API keys dashboard and create a new key
+3. Store the key safely; it will power the `openrouter/free` router in this app
 
 ### Step 2: Clone/Setup the Project
 ```bash
@@ -75,6 +84,7 @@ cd bulletshorts
 Create a `.env` file in the project root:
 ```bash
 ANTHROPIC_API_KEY=your_api_key_here
+OPENROUTER_API_KEY=your_openrouter_key_here  # Optional: required only for the free router
 ```
 
 Replace `your_api_key_here` with the actual API key from Step 1.
@@ -139,13 +149,10 @@ Claude is prompted to return JSON-formatted responses for several reasons:
 - **Usability**: Format naturally matches the Streamlit display requirements
 - **Error Handling**: Invalid JSON is caught and reported to the user
 
-### Model Choice: Claude Opus 4.6
-We chose `claude-opus-4-6` for this task because:
-- **Reasoning Capability**: Excels at analyzing narrative structure and emotional complexity
-- **Context Window**: Handles full scripts without truncation
-- **Instruction Following**: Reliably produces structured JSON output
-- **Quality**: Produces coherent, specific, and actionable insights
-- **Speed/Cost Balance**: Fast enough for interactive use while maintaining quality
+### Model Choice
+Claude (Opus 4.6) remains the default due to its reasoning skills, long context window, and structured output reliability—qualities that match the five analysis dimensions.
+
+OpenRouter's `openrouter/free` router is also available for zero-cost experimentation. It automatically rotates among free models that support reasoning and structured outputs, so the delivered responses may vary slightly in tone/quality but keep costs at $0/token.
 
 ## Technical Implementation Details
 
@@ -264,12 +271,13 @@ bulletshorts/
 - **API Client**: anthropic 0.39.0
 - **Testing**: pytest 7.4.4
 - **Environment**: python-dotenv 1.0.1
+- **HTTP Client**: requests (used for OpenRouter's router)
 
 ## Performance Characteristics
 
 ### API Calls
-- **Per Analysis**: 1 API call to Claude
-- **Cost**: ~$0.01-0.05 per analysis (depends on script length)
+- **Per Analysis**: 1 API call to the selected provider (Claude, OpenAI, Gemini, or OpenRouter's free router)
+- **Cost**: ~$0.01-0.05 per analysis when using Claude (OpenRouter's `openrouter/free` router is $0 input/output tokens)
 - **Time**: 5-15 seconds per analysis
 
 ### Scalability Considerations
@@ -298,6 +306,14 @@ To reduce costs:
 ### API Key Not Found
 **Error**: "ANTHROPIC_API_KEY not found"
 **Solution**: Ensure .env file exists and contains `ANTHROPIC_API_KEY=your_key`
+
+### OpenRouter Key Not Found
+**Error**: "OPENROUTER_API_KEY not found"
+**Solution**: Add `OPENROUTER_API_KEY=your_key` to `.env` if you plan to use the free OpenRouter models; otherwise select Claude/OpenAI/Gemini.
+
+### OpenRouter 400 Bad Request
+**Error**: `400 Client Error: Bad Request`
+**Solution**: Ensure the OpenRouter payload follows the documented schema (e.g., `reasoning` must be an object like `{"enabled": true}` instead of a bare boolean). This keeps the router happy with structured output expectations.
 
 ### Token/Authenticity Errors
 **Error**: "Invalid authentication" or token-related errors
